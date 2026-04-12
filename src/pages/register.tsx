@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import Head from 'next/head'
+import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/auth'
 import type { ApiResponse, AuthResponse } from '@/lib/types'
@@ -10,6 +11,7 @@ export default function RegisterPage() {
   const router = useRouter()
   const { token, setToken } = useAuthStore()
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '' })
+  const [showPassword, setShowPassword] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [bannerError, setBannerError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -99,13 +101,23 @@ export default function RegisterPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-              <input
-                type="password"
-                value={form.password}
-                onChange={set('password')}
-                required
-                className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={set('password')}
+                  required
+                  className="w-full border border-slate-200 rounded-md px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                </button>
+              </div>
               {fieldErrors.password && <p className="text-xs text-red-600 mt-1">{fieldErrors.password}</p>}
             </div>
 

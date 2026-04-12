@@ -19,6 +19,8 @@ export default function InvoiceDetailPage() {
 
   const [confirmAction, setConfirmAction] = useState<'send' | 'void' | 'delete' | 'paid' | null>(null)
   const [bannerError, setBannerError] = useState('')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ['invoices', id],
@@ -66,15 +68,43 @@ export default function InvoiceDetailPage() {
 
   const downloadPdf = async () => {
     if (!invoice) return
-    const res = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([res.data]))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${invoice.invoiceNumber}.pdf`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    window.URL.revokeObjectURL(url)
+    setPdfLoading(true)
+    try {
+      const res = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob' })
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${invoice.invoiceNumber}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => window.URL.revokeObjectURL(url), 10000)
+    } catch {
+      setBannerError('Failed to download PDF. Please try again.')
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
+  const previewPdf = async () => {
+    if (!invoice) return
+    setPdfLoading(true)
+    try {
+      const res = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob' })
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      setPreviewUrl(url)
+    } catch {
+      setBannerError('Failed to load PDF preview.')
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
+  const closePreview = () => {
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl)
+    setPreviewUrl(null)
   }
 
   const doConfirmed = () => {
@@ -137,6 +167,20 @@ export default function InvoiceDetailPage() {
                 Edit
               </Link>
               <button
+                onClick={previewPdf}
+                disabled={pdfLoading}
+                className="px-3 py-1.5 border border-slate-200 text-slate-700 text-sm rounded-md hover:bg-slate-50 disabled:opacity-50"
+              >
+                Preview PDF
+              </button>
+              <button
+                onClick={downloadPdf}
+                disabled={pdfLoading}
+                className="px-3 py-1.5 border border-slate-200 text-slate-700 text-sm rounded-md hover:bg-slate-50 disabled:opacity-50"
+              >
+                {pdfLoading ? 'Loading…' : 'Download PDF'}
+              </button>
+              <button
                 onClick={() => setConfirmAction('send')}
                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-md"
               >
@@ -160,10 +204,18 @@ export default function InvoiceDetailPage() {
           {(invoice.status === 'SENT' || invoice.status === 'OVERDUE') && (
             <>
               <button
-                onClick={downloadPdf}
-                className="px-3 py-1.5 border border-slate-200 text-slate-700 text-sm rounded-md hover:bg-slate-50"
+                onClick={previewPdf}
+                disabled={pdfLoading}
+                className="px-3 py-1.5 border border-slate-200 text-slate-700 text-sm rounded-md hover:bg-slate-50 disabled:opacity-50"
               >
-                Download PDF
+                Preview PDF
+              </button>
+              <button
+                onClick={downloadPdf}
+                disabled={pdfLoading}
+                className="px-3 py-1.5 border border-slate-200 text-slate-700 text-sm rounded-md hover:bg-slate-50 disabled:opacity-50"
+              >
+                {pdfLoading ? 'Loading…' : 'Download PDF'}
               </button>
               <button
                 onClick={() => setConfirmAction('paid')}
@@ -181,12 +233,22 @@ export default function InvoiceDetailPage() {
           )}
 
           {(invoice.status === 'PAID' || invoice.status === 'VOID') && (
-            <button
-              onClick={downloadPdf}
-              className="px-3 py-1.5 border border-slate-200 text-slate-700 text-sm rounded-md hover:bg-slate-50"
-            >
-              Download PDF
-            </button>
+            <>
+              <button
+                onClick={previewPdf}
+                disabled={pdfLoading}
+                className="px-3 py-1.5 border border-slate-200 text-slate-700 text-sm rounded-md hover:bg-slate-50 disabled:opacity-50"
+              >
+                Preview PDF
+              </button>
+              <button
+                onClick={downloadPdf}
+                disabled={pdfLoading}
+                className="px-3 py-1.5 border border-slate-200 text-slate-700 text-sm rounded-md hover:bg-slate-50 disabled:opacity-50"
+              >
+                {pdfLoading ? 'Loading…' : 'Download PDF'}
+              </button>
+            </>
           )}
         </div>
 
@@ -235,7 +297,7 @@ export default function InvoiceDetailPage() {
                     <td className="py-3 pr-4 text-slate-700">{item.description}</td>
                     <td className="py-3 pr-4 text-right text-slate-600">{item.quantity}</td>
                     <td className="py-3 pr-4 text-right text-slate-600">{formatMoney(item.unitRate, invoice.currency)}</td>
-                    <td className="py-3 pr-4 text-right text-slate-600">{item.taxRate ? `${item.taxRate}%` : '—'}</td>
+                    <td className="py-3 pr-4 text-right text-slate-600">{item.taxRate != null ? `${(Number(item.taxRate) * 100).toFixed(0)}%` : '—'}</td>
                     <td className="py-3 text-right text-slate-700">{formatMoney(item.lineTotal, invoice.currency)}</td>
                   </tr>
                 ))}
@@ -246,7 +308,18 @@ export default function InvoiceDetailPage() {
           {/* Totals */}
           <div className="text-right space-y-1 text-sm border-t border-slate-100 pt-4">
             <div className="text-slate-600">Subtotal: {formatMoney(invoice.subtotal, invoice.currency)}</div>
-            <div className="text-slate-600">{invoice.taxLabel || 'Tax'}: {formatMoney(invoice.taxTotal, invoice.currency)}</div>
+            {invoice.taxEntries && invoice.taxEntries.length > 0 ? (
+              invoice.taxEntries.map((entry, i) => {
+                const amount = invoice.subtotal * entry.rate
+                return (
+                  <div key={i} className="text-slate-600">
+                    {entry.label} ({(entry.rate * 100).toFixed(0)}%): {formatMoney(amount, invoice.currency)}
+                  </div>
+                )
+              })
+            ) : (
+              <div className="text-slate-600">{invoice.taxLabel || 'Tax'}: {formatMoney(invoice.taxTotal, invoice.currency)}</div>
+            )}
             <div className="text-lg font-bold text-slate-900">Total: {formatMoney(invoice.total, invoice.currency)}</div>
           </div>
 
@@ -270,6 +343,37 @@ export default function InvoiceDetailPage() {
           onCancel={() => setConfirmAction(null)}
           danger={'danger' in CONFIRM_COPY[confirmAction] && CONFIRM_COPY[confirmAction].danger === true}
         />
+      )}
+
+      {/* PDF Preview Modal */}
+      {previewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl flex flex-col" style={{ height: '90vh' }}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+              <span className="text-sm font-semibold text-slate-700">{invoice?.invoiceNumber} — Preview</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={downloadPdf}
+                  disabled={pdfLoading}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-md disabled:opacity-50"
+                >
+                  Download
+                </button>
+                <button
+                  onClick={closePreview}
+                  className="text-slate-400 hover:text-slate-700 text-lg leading-none px-2"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <iframe
+              src={previewUrl}
+              className="flex-1 w-full rounded-b-lg"
+              title="Invoice PDF Preview"
+            />
+          </div>
+        </div>
       )}
     </AppShell>
   )

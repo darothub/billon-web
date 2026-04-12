@@ -40,24 +40,24 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               title="Draft"
-              count={summary.draft.count}
+              count={summary.draftCount}
             />
             <StatCard
               title="Outstanding"
-              count={summary.outstanding.count}
-              totals={summary.outstanding.totals}
+              count={summary.outstandingCount}
+              totals={summary.outstandingTotals}
               colorClass="text-blue-700"
             />
             <StatCard
               title="Overdue"
-              count={summary.overdue.count}
-              totals={summary.overdue.totals}
+              count={summary.overdueCount}
+              totals={summary.overdueTotals}
               colorClass="text-red-700"
             />
             <StatCard
               title="Paid this month"
-              count={summary.paidThisMonth.count}
-              totals={summary.paidThisMonth.totals}
+              count={summary.paidThisMonthCount}
+              totals={summary.paidThisMonthTotals}
               colorClass="text-green-700"
             />
           </div>

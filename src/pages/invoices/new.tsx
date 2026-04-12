@@ -6,6 +6,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { LineItemsEditor } from '@/components/invoices/LineItemsEditor'
 import api from '@/lib/api'
+import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 import type {
   ApiResponse,
   PageResponse,
@@ -13,6 +14,7 @@ import type {
   InvoiceDetail,
   CreateInvoiceRequest,
   LineItemDraft,
+  TaxEntryDraft,
   UserProfile,
 } from '@/lib/types'
 
@@ -30,6 +32,7 @@ export default function NewInvoicePage() {
     currency: '',
   })
   const [lineItems, setLineItems] = useState<LineItemDraft[]>([])
+  const [taxEntries, setTaxEntries] = useState<TaxEntryDraft[]>([])
   const [bannerError, setBannerError] = useState('')
 
   const { data: clientsPage } = useQuery({
@@ -82,8 +85,13 @@ export default function NewInvoicePage() {
         description: i.description,
         quantity: parseFloat(i.quantity) || 1,
         unitRate: parseFloat(i.unitRate) || 0,
-        taxRate: i.taxRate ? parseFloat(i.taxRate) : undefined,
+        taxRate: i.taxRate ? parseFloat(i.taxRate) / 100 : undefined,
       })),
+      taxEntries: taxEntries.length > 0
+        ? taxEntries
+            .filter((e) => e.label && e.rate)
+            .map((e) => ({ label: e.label, rate: parseFloat(e.rate) / 100 }))
+        : undefined,
     })
   }
 
@@ -177,6 +185,68 @@ export default function NewInvoicePage() {
               onChange={setLineItems}
               currency={currency}
             />
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-700 mb-3">Invoice Taxes</h2>
+            <p className="text-xs text-slate-500 mb-3">Add invoice-level taxes applied to the subtotal (e.g. VAT 20%, IRS 10%).</p>
+            {taxEntries.length > 0 && (
+              <div className="space-y-2 mb-3">
+                <div className="grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 uppercase px-1">
+                  <div className="col-span-6">Label</div>
+                  <div className="col-span-5">Rate (%)</div>
+                  <div className="col-span-1"></div>
+                </div>
+                {taxEntries.map((entry) => (
+                  <div key={entry.localId} className="grid grid-cols-12 gap-2 items-center">
+                    <input
+                      className="col-span-6 border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="e.g. VAT"
+                      value={entry.label}
+                      onChange={(e) =>
+                        setTaxEntries((prev) =>
+                          prev.map((t) => (t.localId === entry.localId ? { ...t, label: e.target.value } : t))
+                        )
+                      }
+                    />
+                    <input
+                      className="col-span-5 border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="20"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={entry.rate}
+                      onChange={(e) =>
+                        setTaxEntries((prev) =>
+                          prev.map((t) => (t.localId === entry.localId ? { ...t, rate: e.target.value } : t))
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setTaxEntries((prev) => prev.filter((t) => t.localId !== entry.localId))}
+                      className="col-span-1 flex items-center justify-center text-slate-400 hover:text-red-600"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() =>
+                setTaxEntries((prev) => [
+                  ...prev,
+                  { localId: Math.random().toString(36).slice(2), label: '', rate: '' },
+                ])
+              }
+              className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800"
+            >
+              <PlusIcon className="w-4 h-4" />
+              Add tax
+            </button>
           </div>
 
           <div className="flex gap-3">

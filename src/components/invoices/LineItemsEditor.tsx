@@ -52,7 +52,7 @@ function AddLineItemForm({ onAdd, loading }: { onAdd: (body: AddLineItemRequest)
       description: form.description,
       quantity: parseFloat(form.quantity) || 1,
       unitRate: parseFloat(form.unitRate),
-      taxRate: form.taxRate ? parseFloat(form.taxRate) : undefined,
+      taxRate: form.taxRate ? parseFloat(form.taxRate) / 100 : undefined,
     })
     setForm({ description: '', quantity: '1', unitRate: '', taxRate: '' })
   }
@@ -111,7 +111,7 @@ export function LineItemsEditor(props: LineItemsEditorProps) {
             <div className="col-span-5 text-slate-700">{item.description}</div>
             <div className="col-span-2 text-slate-600">{item.quantity}</div>
             <div className="col-span-2 text-slate-600">{item.unitRate.toFixed(2)}</div>
-            <div className="col-span-2 text-slate-600">{item.taxRate ?? '—'}</div>
+            <div className="col-span-2 text-slate-600">{item.taxRate != null ? `${(Number(item.taxRate) * 100).toFixed(0)}%` : '—'}</div>
             <div className="col-span-1">
               <button
                 onClick={() => deleteLineItemMutation.mutate(item.id)}

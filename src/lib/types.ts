@@ -31,6 +31,20 @@ export interface UserProfile {
   invoicePrefix: string
   taxLabel: string
   logoUrl: string | null
+  bankName: string | null
+  bankAccountNumber: string | null
+  bankSortCode: string | null
+}
+
+export interface TaxEntry {
+  label: string
+  rate: number  // decimal fraction, e.g. 0.20 = 20%
+}
+
+export interface TaxEntryDraft {
+  localId: string
+  label: string
+  rate: string  // percentage string for form binding
 }
 
 // Clients
@@ -87,6 +101,7 @@ export interface InvoiceDetail {
   dueDate: string
   currency: string
   taxLabel: string
+  taxEntries: TaxEntry[] | null
   note: string | null
   lineItems: InvoiceLineItemResponse[]
   subtotal: number
@@ -106,10 +121,15 @@ export interface CurrencyTotal {
 }
 
 export interface DashboardSummary {
-  draft: { count: number }
-  outstanding: { count: number; totals: CurrencyTotal[] }
-  overdue: { count: number; totals: CurrencyTotal[] }
-  paidThisMonth: { count: number; totals: CurrencyTotal[] }
+  draftCount: number
+  outstandingCount: number
+  outstandingTotals: Record<string, number>
+  overdueCount: number
+  overdueTotals: Record<string, number>
+  paidThisMonthCount: number
+  paidThisMonthTotals: Record<string, number>
+  totalClients: number
+  totalInvoices: number
 }
 
 // Form request types
@@ -141,6 +161,7 @@ export interface CreateInvoiceRequest {
   taxLabel?: string
   note?: string
   lineItems: AddLineItemRequest[]
+  taxEntries?: TaxEntry[]
 }
 
 export interface UpdateInvoiceRequest {
@@ -156,6 +177,9 @@ export interface UpdateProfileRequest {
   invoicePrefix: string
   taxLabel: string
   defaultCurrency: string
+  bankName?: string
+  bankAccountNumber?: string
+  bankSortCode?: string
 }
 
 // Local line item draft (form state only, never sent as-is to API)
