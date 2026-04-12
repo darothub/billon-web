@@ -7,6 +7,31 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import api from '@/lib/api'
 import type { ApiResponse, ClientDetail, CreateClientRequest } from '@/lib/types'
 
+interface FieldProps {
+  label: string
+  value: string
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  type?: string
+  required?: boolean
+  error?: string
+}
+
+function Field({ label, value, onChange, type = 'text', required, error }: FieldProps) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-700 mb-1">{label}{required && ' *'}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        required={required}
+        className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      />
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+    </div>
+  )
+}
+
 export default function NewClientPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -53,20 +78,6 @@ export default function NewClientPage() {
     mutation.mutate(form)
   }
 
-  const Field = ({ label, field, type = 'text', required }: { label: string; field: keyof CreateClientRequest; type?: string; required?: boolean }) => (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">{label}{required && ' *'}</label>
-      <input
-        type={type}
-        value={form[field] ?? ''}
-        onChange={set(field)}
-        required={required}
-        className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-      />
-      {fieldErrors[field] && <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p>}
-    </div>
-  )
-
   return (
     <AppShell>
       <Head><title>New Client — Billon</title></Head>
@@ -81,14 +92,14 @@ export default function NewClientPage() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Name" field="name" required />
-            <Field label="Email" field="email" type="email" required />
-            <Field label="Company name" field="companyName" />
-            <Field label="Address line 1" field="addressLine1" />
-            <Field label="Address line 2" field="addressLine2" />
-            <Field label="City" field="city" />
-            <Field label="Postcode" field="postcode" />
-            <Field label="Country" field="country" />
+            <Field label="Name" value={form.name} onChange={set('name')} required error={fieldErrors.name} />
+            <Field label="Email" value={form.email} onChange={set('email')} type="email" required error={fieldErrors.email} />
+            <Field label="Company name" value={form.companyName ?? ''} onChange={set('companyName')} error={fieldErrors.companyName} />
+            <Field label="Address line 1" value={form.addressLine1 ?? ''} onChange={set('addressLine1')} error={fieldErrors.addressLine1} />
+            <Field label="Address line 2" value={form.addressLine2 ?? ''} onChange={set('addressLine2')} error={fieldErrors.addressLine2} />
+            <Field label="City" value={form.city ?? ''} onChange={set('city')} error={fieldErrors.city} />
+            <Field label="Postcode" value={form.postcode ?? ''} onChange={set('postcode')} error={fieldErrors.postcode} />
+            <Field label="Country" value={form.country ?? ''} onChange={set('country')} error={fieldErrors.country} />
           </div>
           <div className="flex gap-3 pt-2">
             <button

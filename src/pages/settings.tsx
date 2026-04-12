@@ -25,9 +25,7 @@ export default function SettingsPage() {
     invoicePrefix: '',
     taxLabel: '',
     defaultCurrency: '',
-    bankName: '',
-    bankAccountNumber: '',
-    bankSortCode: '',
+    paymentDetails: '',
   })
 
   useEffect(() => {
@@ -38,9 +36,7 @@ export default function SettingsPage() {
         invoicePrefix: profile.invoicePrefix,
         taxLabel: profile.taxLabel,
         defaultCurrency: profile.defaultCurrency,
-        bankName: profile.bankName ?? '',
-        bankAccountNumber: profile.bankAccountNumber ?? '',
-        bankSortCode: profile.bankSortCode ?? '',
+        paymentDetails: profile.paymentDetails ?? '',
       })
     }
   }, [profile])
@@ -61,7 +57,7 @@ export default function SettingsPage() {
   })
 
   const set = (field: keyof UpdateProfileRequest) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }))
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -158,38 +154,15 @@ export default function SettingsPage() {
             </div>
 
             <div className="border-t border-slate-100 pt-4">
-              <p className="text-sm font-semibold text-slate-700 mb-3">Bank account details</p>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Bank name</label>
-                  <input
-                    value={form.bankName ?? ''}
-                    onChange={set('bankName')}
-                    placeholder="e.g. Barclays"
-                    className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Account number</label>
-                    <input
-                      value={form.bankAccountNumber ?? ''}
-                      onChange={set('bankAccountNumber')}
-                      placeholder="12345678"
-                      className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Sort code</label>
-                    <input
-                      value={form.bankSortCode ?? ''}
-                      onChange={set('bankSortCode')}
-                      placeholder="00-00-00"
-                      className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </div>
-              </div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Payment / account details</label>
+              <p className="text-xs text-slate-500 mb-2">Shown on every invoice PDF. Enter bank name, account number, sort code, or any payment instructions.</p>
+              <textarea
+                value={form.paymentDetails ?? ''}
+                onChange={set('paymentDetails')}
+                rows={4}
+                placeholder={'Bank: Barclays\nAccount Number: 12345678\nSort Code: 00-00-00'}
+                className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+              />
             </div>
 
             <div className="pt-2">

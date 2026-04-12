@@ -34,6 +34,7 @@ export interface UserProfile {
   bankName: string | null
   bankAccountNumber: string | null
   bankSortCode: string | null
+  paymentDetails: string | null
 }
 
 export interface TaxEntry {
@@ -180,6 +181,7 @@ export interface UpdateProfileRequest {
   bankName?: string
   bankAccountNumber?: string
   bankSortCode?: string
+  paymentDetails?: string
 }
 
 // Local line item draft (form state only, never sent as-is to API)

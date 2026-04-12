@@ -1,5 +1,5 @@
 import Head from 'next/head'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AppShell } from '@/components/layout/AppShell'
@@ -34,6 +34,10 @@ export default function NewInvoicePage() {
   const [lineItems, setLineItems] = useState<LineItemDraft[]>([])
   const [taxEntries, setTaxEntries] = useState<TaxEntryDraft[]>([])
   const [bannerError, setBannerError] = useState('')
+  const [editingPayment, setEditingPayment] = useState(false)
+  const [paymentDetails, setPaymentDetails] = useState('')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   const { data: clientsPage } = useQuery({
     queryKey: ['clients', { size: 100 }],
@@ -54,6 +58,39 @@ export default function NewInvoicePage() {
   // Initialise currency from profile once loaded
   const currency = form.currency || profile?.defaultCurrency || 'GBP'
 
+  // Pre-fill payment details from profile once
+  const paymentInitRef = useRef(false)
+  useEffect(() => {
+    if (profile && !paymentInitRef.current) {
+      paymentInitRef.current = true
+      setPaymentDetails(profile.paymentDetails ?? '')
+    }
+  }, [profile])
+
+  const buildBody = (): CreateInvoiceRequest => ({
+    clientId: parseInt(form.clientId),
+    currency,
+    issueDate: form.issueDate,
+    dueDate: form.dueDate,
+    taxLabel: form.taxLabel || undefined,
+    note: form.note || undefined,
+    lineItems: lineItems.map((i) => ({
+      description: i.description,
+      quantity: parseFloat(i.quantity) || 1,
+      unitRate: parseFloat(i.unitRate) || 0,
+      taxRate: i.taxRate ? parseFloat(i.taxRate) / 100 : undefined,
+    })),
+    taxEntries: taxEntries.length > 0
+      ? taxEntries.filter((e) => e.label && e.rate).map((e) => ({ label: e.label, rate: parseFloat(e.rate) / 100 }))
+      : undefined,
+  })
+
+  const validate = (): boolean => {
+    if (!form.clientId) { setBannerError('Please select a client'); return false }
+    if (lineItems.length === 0) { setBannerError('Add at least one line item'); return false }
+    return true
+  }
+
   const mutation = useMutation({
     mutationFn: (body: CreateInvoiceRequest) =>
       api.post<ApiResponse<InvoiceDetail>>('/invoices', body).then((res) => res.data.data!),
@@ -71,28 +108,38 @@ export default function NewInvoicePage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setBannerError('')
-    if (!form.clientId) { setBannerError('Please select a client'); return }
-    if (lineItems.length === 0) { setBannerError('Add at least one line item'); return }
+    if (!validate()) return
+    mutation.mutate(buildBody())
+  }
 
-    mutation.mutate({
-      clientId: parseInt(form.clientId),
-      currency,
-      issueDate: form.issueDate,
-      dueDate: form.dueDate,
-      taxLabel: form.taxLabel || undefined,
-      note: form.note || undefined,
-      lineItems: lineItems.map((i) => ({
-        description: i.description,
-        quantity: parseFloat(i.quantity) || 1,
-        unitRate: parseFloat(i.unitRate) || 0,
-        taxRate: i.taxRate ? parseFloat(i.taxRate) / 100 : undefined,
-      })),
-      taxEntries: taxEntries.length > 0
-        ? taxEntries
-            .filter((e) => e.label && e.rate)
-            .map((e) => ({ label: e.label, rate: parseFloat(e.rate) / 100 }))
-        : undefined,
-    })
+  const handlePreview = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    setBannerError('')
+    if (!validate()) return
+    setPreviewLoading(true)
+    try {
+      const invoice = await api.post<ApiResponse<InvoiceDetail>>('/invoices', buildBody()).then((r) => r.data.data!)
+      queryClient.invalidateQueries({ queryKey: ['invoices'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      const pdfRes = await api.get(`/invoices/${invoice.id}/pdf`, { responseType: 'blob' })
+      const blob = new Blob([pdfRes.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      setPreviewUrl(url)
+      // Store invoice id so we can navigate to it on close
+      router.replace(`/invoices/new?preview=${invoice.id}`, undefined, { shallow: true })
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } }
+      setBannerError(e.response?.data?.message ?? 'Failed to generate preview')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const closePreview = () => {
+    const invoiceId = router.query.preview
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl)
+    setPreviewUrl(null)
+    if (invoiceId) router.push(`/invoices/${invoiceId}`)
   }
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -249,13 +296,48 @@ export default function NewInvoicePage() {
             </button>
           </div>
 
-          <div className="flex gap-3">
+          {/* Payment details */}
+          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-slate-700">Payment / account details</h2>
+              <button
+                type="button"
+                onClick={() => setEditingPayment((v) => !v)}
+                className="text-xs text-indigo-600 hover:text-indigo-800"
+              >
+                {editingPayment ? 'Done' : 'Edit'}
+              </button>
+            </div>
+            {editingPayment ? (
+              <textarea
+                value={paymentDetails}
+                onChange={(e) => setPaymentDetails(e.target.value)}
+                rows={4}
+                placeholder={'Bank: Barclays\nAccount Number: 12345678\nSort Code: 00-00-00'}
+                className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+              />
+            ) : paymentDetails ? (
+              <pre className="text-sm text-slate-600 whitespace-pre-wrap font-sans">{paymentDetails}</pre>
+            ) : (
+              <p className="text-sm text-slate-400 italic">No payment details set. <button type="button" onClick={() => setEditingPayment(true)} className="text-indigo-600 hover:underline not-italic">Add them here</button> or save them in <a href="/settings" className="text-indigo-600 hover:underline">Settings</a>.</p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-3">
             <button
               type="submit"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || previewLoading}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium rounded-md"
             >
               {mutation.isPending ? 'Creating…' : 'Create invoice'}
+            </button>
+            <button
+              type="button"
+              onClick={handlePreview}
+              disabled={mutation.isPending || previewLoading}
+              className="px-4 py-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 text-sm font-medium rounded-md"
+            >
+              {previewLoading ? 'Generating…' : 'Preview PDF'}
             </button>
             <button
               type="button"
@@ -267,6 +349,35 @@ export default function NewInvoicePage() {
           </div>
         </form>
       </div>
+
+      {/* PDF Preview Modal */}
+      {previewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl flex flex-col" style={{ height: '90vh' }}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+              <span className="text-sm font-semibold text-slate-700">Invoice Preview</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={closePreview}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-md"
+                >
+                  Go to invoice
+                </button>
+                <button
+                  onClick={() => {
+                    if (previewUrl) window.URL.revokeObjectURL(previewUrl)
+                    setPreviewUrl(null)
+                  }}
+                  className="text-slate-400 hover:text-slate-700 text-lg leading-none px-2"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <iframe src={previewUrl} className="flex-1 w-full rounded-b-lg" title="Invoice PDF Preview" />
+          </div>
+        </div>
+      )}
     </AppShell>
   )
 }
