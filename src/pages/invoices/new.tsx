@@ -38,6 +38,7 @@ export default function NewInvoicePage() {
   const [paymentDetails, setPaymentDetails] = useState('')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [createdInvoiceId, setCreatedInvoiceId] = useState<number | null>(null)
 
   const { data: clientsPage } = useQuery({
     queryKey: ['clients', { size: 100 }],
@@ -52,24 +53,21 @@ export default function NewInvoicePage() {
     queryFn: () =>
       api.get<ApiResponse<UserProfile>>('/users/me').then((res) => res.data.data!),
     retry: false,
-    staleTime: Infinity,
   })
 
-  // Initialise currency from profile once loaded
-  const currency = form.currency || profile?.defaultCurrency || 'GBP'
-
-  // Pre-fill payment details from profile once
-  const paymentInitRef = useRef(false)
+  // Initialise currency and payment details from profile once
+  const profileInitRef = useRef(false)
   useEffect(() => {
-    if (profile && !paymentInitRef.current) {
-      paymentInitRef.current = true
+    if (profile && !profileInitRef.current) {
+      profileInitRef.current = true
+      setForm((f) => ({ ...f, currency: f.currency || profile.defaultCurrency || 'GBP' }))
       setPaymentDetails(profile.paymentDetails ?? '')
     }
   }, [profile])
 
   const buildBody = (): CreateInvoiceRequest => ({
     clientId: parseInt(form.clientId),
-    currency,
+    currency: form.currency || 'GBP',
     issueDate: form.issueDate,
     dueDate: form.dueDate,
     taxLabel: form.taxLabel || undefined,
@@ -121,12 +119,11 @@ export default function NewInvoicePage() {
       const invoice = await api.post<ApiResponse<InvoiceDetail>>('/invoices', buildBody()).then((r) => r.data.data!)
       queryClient.invalidateQueries({ queryKey: ['invoices'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      setCreatedInvoiceId(invoice.id)
       const pdfRes = await api.get(`/invoices/${invoice.id}/pdf`, { responseType: 'blob' })
       const blob = new Blob([pdfRes.data], { type: 'application/pdf' })
       const url = window.URL.createObjectURL(blob)
       setPreviewUrl(url)
-      // Store invoice id so we can navigate to it on close
-      router.replace(`/invoices/new?preview=${invoice.id}`, undefined, { shallow: true })
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } }
       setBannerError(e.response?.data?.message ?? 'Failed to generate preview')
@@ -135,11 +132,10 @@ export default function NewInvoicePage() {
     }
   }
 
-  const closePreview = () => {
-    const invoiceId = router.query.preview
+  const closePreview = (navigate = false) => {
     if (previewUrl) window.URL.revokeObjectURL(previewUrl)
     setPreviewUrl(null)
-    if (invoiceId) router.push(`/invoices/${invoiceId}`)
+    if (navigate && createdInvoiceId) router.push(`/invoices/${createdInvoiceId}`)
   }
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -177,7 +173,7 @@ export default function NewInvoicePage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
                 <input
-                  value={currency}
+                  value={form.currency}
                   onChange={set('currency')}
                   placeholder="GBP"
                   className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -230,7 +226,7 @@ export default function NewInvoicePage() {
               mode="create"
               items={lineItems}
               onChange={setLineItems}
-              currency={currency}
+              currency={form.currency || 'GBP'}
             />
           </div>
 
@@ -324,21 +320,33 @@ export default function NewInvoicePage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <button
-              type="submit"
-              disabled={mutation.isPending || previewLoading}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium rounded-md"
-            >
-              {mutation.isPending ? 'Creating…' : 'Create invoice'}
-            </button>
-            <button
-              type="button"
-              onClick={handlePreview}
-              disabled={mutation.isPending || previewLoading}
-              className="px-4 py-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 text-sm font-medium rounded-md"
-            >
-              {previewLoading ? 'Generating…' : 'Preview PDF'}
-            </button>
+            {createdInvoiceId ? (
+              <button
+                type="button"
+                onClick={() => router.push(`/invoices/${createdInvoiceId}`)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md"
+              >
+                View draft invoice →
+              </button>
+            ) : (
+              <>
+                <button
+                  type="submit"
+                  disabled={mutation.isPending || previewLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium rounded-md"
+                >
+                  {mutation.isPending ? 'Creating…' : 'Create invoice'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePreview}
+                  disabled={mutation.isPending || previewLoading}
+                  className="px-4 py-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 text-sm font-medium rounded-md"
+                >
+                  {previewLoading ? 'Generating…' : 'Preview PDF'}
+                </button>
+              </>
+            )}
             <button
               type="button"
               onClick={() => router.push('/invoices')}
@@ -358,16 +366,13 @@ export default function NewInvoicePage() {
               <span className="text-sm font-semibold text-slate-700">Invoice Preview</span>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={closePreview}
+                  onClick={() => closePreview(true)}
                   className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-md"
                 >
                   Go to invoice
                 </button>
                 <button
-                  onClick={() => {
-                    if (previewUrl) window.URL.revokeObjectURL(previewUrl)
-                    setPreviewUrl(null)
-                  }}
+                  onClick={() => closePreview(false)}
                   className="text-slate-400 hover:text-slate-700 text-lg leading-none px-2"
                 >
                   ✕
