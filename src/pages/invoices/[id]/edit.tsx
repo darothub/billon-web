@@ -1,5 +1,5 @@
 import Head from 'next/head'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AppShell } from '@/components/layout/AppShell'
@@ -16,6 +16,7 @@ export default function EditInvoicePage() {
   const queryClient = useQueryClient()
   const [bannerError, setBannerError] = useState('')
   const [taxEntries, setTaxEntries] = useState<TaxEntryDraft[]>([])
+  const formInitialized = useRef(false)
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ['invoices', id],
@@ -34,27 +35,27 @@ export default function EditInvoicePage() {
   })
 
   useEffect(() => {
-    if (invoice) {
-      if (invoice.status !== 'DRAFT') {
-        router.replace(`/invoices/${id}`)
-        return
-      }
-      setForm({
-        issueDate: invoice.issueDate,
-        dueDate: invoice.dueDate,
-        currency: invoice.currency,
-        taxLabel: invoice.taxLabel ?? '',
-        note: invoice.note ?? '',
-      })
-      if (invoice.taxEntries && invoice.taxEntries.length > 0) {
-        setTaxEntries(
-          invoice.taxEntries.map((e) => ({
-            localId: Math.random().toString(36).slice(2),
-            label: e.label,
-            rate: String(Math.round(e.rate * 100)),
-          }))
-        )
-      }
+    if (!invoice || formInitialized.current) return
+    if (invoice.status !== 'DRAFT') {
+      router.replace(`/invoices/${id}`)
+      return
+    }
+    formInitialized.current = true
+    setForm({
+      issueDate: invoice.issueDate,
+      dueDate: invoice.dueDate,
+      currency: invoice.currency,
+      taxLabel: invoice.taxLabel ?? '',
+      note: invoice.note ?? '',
+    })
+    if (invoice.taxEntries && invoice.taxEntries.length > 0) {
+      setTaxEntries(
+        invoice.taxEntries.map((e) => ({
+          localId: Math.random().toString(36).slice(2),
+          label: e.label,
+          rate: String(Math.round(e.rate * 100)),
+        }))
+      )
     }
   }, [invoice, id, router])
 
