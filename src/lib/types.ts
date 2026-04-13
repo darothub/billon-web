@@ -168,8 +168,10 @@ export interface CreateInvoiceRequest {
 export interface UpdateInvoiceRequest {
   issueDate?: string
   dueDate?: string
+  currency?: string
   taxLabel?: string
   note?: string
+  taxEntries?: TaxEntry[]
 }
 
 export interface UpdateProfileRequest {
