@@ -29,6 +29,7 @@ export interface UserProfile {
   lastName: string
   defaultCurrency: string
   invoicePrefix: string
+  invoiceNextNumber: number
   taxLabel: string
   logoUrl: string | null
   bankName: string | null
@@ -156,6 +157,7 @@ export interface AddLineItemRequest {
 
 export interface CreateInvoiceRequest {
   clientId: number
+  invoiceNumber?: string
   currency: string
   issueDate: string
   dueDate: string
@@ -166,6 +168,7 @@ export interface CreateInvoiceRequest {
 }
 
 export interface UpdateInvoiceRequest {
+  invoiceNumber?: string
   issueDate?: string
   dueDate?: string
   currency?: string

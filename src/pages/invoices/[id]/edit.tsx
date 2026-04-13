@@ -27,6 +27,7 @@ export default function EditInvoicePage() {
   })
 
   const [form, setForm] = useState({
+    invoiceNumber: '',
     issueDate: '',
     dueDate: '',
     currency: '',
@@ -42,6 +43,7 @@ export default function EditInvoicePage() {
     }
     formInitialized.current = true
     setForm({
+      invoiceNumber: invoice.invoiceNumber,
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate,
       currency: invoice.currency,
@@ -77,6 +79,7 @@ export default function EditInvoicePage() {
     setBannerError('')
     const validTaxEntries = taxEntries.filter((t) => t.label && t.rate)
     updateMutation.mutate({
+      invoiceNumber: form.invoiceNumber.trim() || undefined,
       issueDate: form.issueDate || undefined,
       dueDate: form.dueDate || undefined,
       currency: form.currency || undefined,
@@ -125,6 +128,14 @@ export default function EditInvoicePage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Invoice number</label>
+                <input
+                  value={form.invoiceNumber}
+                  onChange={set('invoiceNumber')}
+                  className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Issue date</label>
                 <input

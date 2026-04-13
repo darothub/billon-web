@@ -25,6 +25,7 @@ export default function NewInvoicePage() {
 
   const [form, setForm] = useState({
     clientId: preselectedClientId ?? '',
+    invoiceNumber: '',
     issueDate: new Date().toISOString().slice(0, 10),
     dueDate: '',
     taxLabel: '',
@@ -55,18 +56,25 @@ export default function NewInvoicePage() {
     retry: false,
   })
 
-  // Initialise currency and payment details from profile once
+  // Initialise currency, invoice number, and payment details from profile once
   const profileInitRef = useRef(false)
   useEffect(() => {
     if (profile && !profileInitRef.current) {
       profileInitRef.current = true
-      setForm((f) => ({ ...f, currency: f.currency || profile.defaultCurrency || 'GBP' }))
+      const nextNum = String(profile.invoiceNextNumber ?? 1).padStart(4, '0')
+      const suggestedNumber = `${profile.invoicePrefix ?? 'INV'}-${nextNum}`
+      setForm((f) => ({
+        ...f,
+        currency: f.currency || profile.defaultCurrency || 'GBP',
+        invoiceNumber: f.invoiceNumber || suggestedNumber,
+      }))
       setPaymentDetails(profile.paymentDetails ?? '')
     }
   }, [profile])
 
   const buildBody = (): CreateInvoiceRequest => ({
     clientId: parseInt(form.clientId),
+    invoiceNumber: form.invoiceNumber.trim() || undefined,
     currency: form.currency || 'GBP',
     issueDate: form.issueDate,
     dueDate: form.dueDate,
@@ -169,6 +177,15 @@ export default function NewInvoicePage() {
                     <option key={c.id} value={String(c.id)}>{c.name}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Invoice number</label>
+                <input
+                  value={form.invoiceNumber}
+                  onChange={set('invoiceNumber')}
+                  placeholder="INV-0001"
+                  className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
