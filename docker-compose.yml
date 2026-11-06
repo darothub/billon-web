@@ -1,0 +1,29 @@
+# A local PostgreSQL for Billon, so a fresh machine needs nothing installed but Docker.
+#
+#   docker compose up -d
+#
+# Three databases: `billon` for development, `billon_test` for replacement-system
+# tests, and `billon_legacy_test` for the synthetic Java-schema migration source.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: billon-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: billon
+      POSTGRES_PASSWORD: billon
+      POSTGRES_DB: billon
+    ports:
+      - '5432:5432'
+    volumes:
+      - billon-postgres-data:/var/lib/postgresql/data
+      - ./docker/create-test-database.sql:/docker-entrypoint-initdb.d/10-create-test-database.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U billon -d billon']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  billon-postgres-data:

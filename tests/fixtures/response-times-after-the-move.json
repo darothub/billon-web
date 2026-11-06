@@ -1,0 +1,11 @@
+{
+  "measuredOn": "2026-11-06",
+  "where": "local",
+  "medianMs": {
+    "dashboard": 1,
+    "clients": 1,
+    "invoices": 1,
+    "invoice": 1,
+    "pdf": 9
+  }
+}

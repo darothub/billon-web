@@ -1,467 +1,164 @@
-# Billon Web — Low-Level Design (LLD)
+# Billon — Low Level Design
 
-**Version:** 1.0
-**Date:** 2026-04-09
+How each part actually works. The shape of the whole thing is in `docs/HLD.md`.
 
----
+## Every address
 
-## 1. `src/lib/api.ts` — Axios Instance
+All under `/api/v1`, all answered by a file under `src/pages/api/v1/`.
 
-```
-Axios instance
-  baseURL = NEXT_PUBLIC_API_URL
-  Content-Type: application/json
-
-Request interceptor:
-  → reads Cookies.get('billon_token')
-  → sets Authorization: Bearer <token>
-  Note: reads cookie directly (not from Zustand store) to avoid SSR hydration issues
-
-Response interceptor:
-  success (2xx) → pass through
-  error 401     → Cookies.remove('billon_token')
-                → useAuthStore.getState().logout()
-                → window.location.replace('/login')
-  other errors  → Promise.reject(error) — caller handles
-```
-
----
-
-## 2. `src/lib/auth.ts` — Zustand Auth Store
-
-```
-State shape:
-  token: string | null     ← initialised from Cookies.get('billon_token') on mount (browser only)
-
-Actions:
-  setToken(token)          → Cookies.set('billon_token', token, { expires: 7, sameSite: 'lax' })
-                           → set({ token })
-  logout()                 → Cookies.remove('billon_token')
-                           → set({ token: null })
-```
-
----
-
-## 3. `src/lib/types.ts` — Type Catalogue
-
-### API envelope
-```ts
-ApiResponse<T>    { status, message, data: T | null }
-PageResponse<T>   { content: T[], page, size, totalElements, totalPages, first, last }
-```
-
-### Auth
-```ts
-AuthResponse      { token, user: UserProfile }
-UserProfile       { id, email, firstName, lastName, defaultCurrency, invoicePrefix, taxLabel, logoUrl }
-```
-
-### Clients
-```ts
-ClientSummary     { id, name, email, companyName, invoiceCount, createdAt }
-ClientDetail      extends ClientSummary + { addressLine1-2, city, postcode, country, updatedAt }
-```
-
-### Invoices
-```ts
-InvoiceStatus     = 'DRAFT' | 'SENT' | 'OVERDUE' | 'PAID' | 'VOID'
-InvoiceSummary    { id, invoiceNumber, clientName, status, issueDate, dueDate, currency, total, createdAt }
-InvoiceLineItemResponse  { id, description, quantity, unitRate, taxRate, lineTotal, taxAmount, position }
-InvoiceDetail     { id, invoiceNumber, client: ClientDetail, status, issueDate, dueDate, currency, taxLabel,
-                    note, lineItems, subtotal, taxTotal, total, sentAt, paidAt, voidedAt, createdAt, updatedAt }
-```
-
-### Dashboard
-```ts
-CurrencyTotal     { currency, amount }
-DashboardSummary  {
-  draft:          { count }
-  outstanding:    { count, totals: CurrencyTotal[] }
-  overdue:        { count, totals: CurrencyTotal[] }
-  paidThisMonth:  { count, totals: CurrencyTotal[] }
-}
-```
-
-### Form request types
-```ts
-CreateClientRequest    { name*, email*, companyName?, addressLine1?, addressLine2?, city?, postcode?, country? }
-UpdateClientRequest    same as CreateClientRequest
-CreateInvoiceRequest   { clientId, currency, issueDate, dueDate, taxLabel?, note?, lineItems: AddLineItemRequest[] }
-AddLineItemRequest     { description, quantity, unitRate, taxRate? }
-UpdateInvoiceRequest   { issueDate?, dueDate?, taxLabel?, note? }
-UpdateProfileRequest   { firstName, lastName, invoicePrefix, taxLabel, defaultCurrency }
-LineItemDraft          { localId, description, quantity, unitRate, taxRate }   ← all strings for input binding
-```
-
----
-
-## 4. `src/lib/utils.ts`
-
-```ts
-formatMoney(amount, currency)   → `${currency} ${amount.toFixed(2)}`
-formatDate(isoDate)             → "31 Mar 2026"   (en-GB, 2-digit day, short month, year)
-formatDateShort(isoDate)        → "31 Mar"         (en-GB, 2-digit day, short month)
-```
-
----
-
-## 5. Layout Components
-
-### `AppShell`
-
-```
-Props: { children: ReactNode }
-
-Internal state: mobileOpen (boolean)
-
-Mount effect:
-  reads token from useAuthStore
-  if null → router.replace('/login') + return null
-
-Render:
-  <div flex h-screen overflow-hidden>
-    <Sidebar mobileOpen={mobileOpen} />
-    <div flex-col flex-1>
-      <Topbar onMenuClick={() => toggle mobileOpen} />
-      <main overflow-y-auto p-6>
-        {children}
-      </main>
-    </div>
-  </div>
-```
-
-### `Sidebar`
-
-```
-Props: { mobileOpen: boolean }
-
-Nav items:
-  Dashboard  /           HomeIcon
-  Clients    /clients    UserGroupIcon
-  Invoices   /invoices   DocumentTextIcon
-
-Bottom items:
-  Settings   /settings   Cog6ToothIcon
-
-Active detection:
-  href === '/'  → exact match on router.pathname
-  else          → router.pathname.startsWith(href)
-
-Active styles:   bg-indigo-50 text-indigo-700 font-medium
-Inactive styles: text-slate-600 hover:bg-slate-100
-
-Desktop: w-[180px] sticky sidebar, always visible (lg+)
-Mobile:  hidden by default, fixed overlay when mobileOpen=true
-```
-
-### `Topbar`
-
-```
-Props: { onMenuClick: () => void }
-
-Queries: ['me'] → GET /users/me  (for display name)
-
-Left: hamburger (mobile) + "Billon" wordmark (mobile only)
-Right: user full name + ChevronDown → dropdown:
-  Profile → /settings
-  Sign out → logout() + router.replace('/login')
-```
-
----
-
-## 6. UI Primitives
-
-### `StatusBadge`
-```ts
-Props: { status: InvoiceStatus }
-Styles:
-  DRAFT   → bg-slate-100 text-slate-600
-  SENT    → bg-blue-100 text-blue-700
-  OVERDUE → bg-red-100 text-red-700
-  PAID    → bg-green-100 text-green-700
-  VOID    → bg-slate-100 text-slate-400
-```
-
-### `Pagination`
-```ts
-Props: { page: number, totalPages: number, onPageChange: (page: number) => void }
-Renders nothing if totalPages <= 1
-Shows: ← Previous | Page N of M | Next →
-Disables buttons at boundaries (page === 0, page >= totalPages - 1)
-```
-
-### `PageHeader`
-```ts
-Props: { title, backHref?, backLabel?, action?: ReactNode }
-Layout: back link (optional) above h1 | CTA slot (right, optional)
-```
-
-### `ConfirmDialog`
-```ts
-Props: { open, title, message, confirmLabel, onConfirm, onCancel, danger? }
-When open=false: renders null
-Modal overlay: fixed inset-0, semi-transparent backdrop
-Buttons: Cancel (slate) | Confirm (indigo or red if danger=true)
-Backdrop click → onCancel
-```
-
-### `EmptyState`
-```ts
-Props: { message, action?: { label, href } }
-Centered icon + message + optional Link
-```
-
-### `LoadingSkeleton`
-```ts
-Props: { rows?: number = 3 }
-N animated gray bars (animate-pulse h-10 bg-slate-100 rounded)
-```
-
----
-
-## 7. Feature Components
-
-### `StatCard`
-```ts
-Props: { title, count, totals?: CurrencyTotal[], colorClass? }
-count rendered in large font (colorClass controls colour)
-totals: each CurrencyTotal on its own line via formatMoney
-zero totals: shows "—"
-```
-
-### `RecentInvoicesTable`
-```ts
-Props: { invoices: InvoiceSummary[] | undefined, isLoading: boolean }
-isLoading=true  → LoadingSkeleton rows={5}
-empty           → EmptyState + link to /invoices/new
-Columns: Number | Client | Status (StatusBadge) | Due | Total
-Row click → router.push(/invoices/[id])
-Footer: "View all →" link to /invoices
-```
-
-### `ClientTable`
-```ts
-Props: { clients: ClientSummary[] | undefined, isLoading: boolean }
-Columns: Name | Email | Invoices | Added (formatDate)
-Row click → router.push(/clients/[id])
-```
-
-### `ClientInfoCard`
-```ts
-Props: { client, editing, onEdit, onSave, onCancel, saving? }
-View mode: <dl> grid showing all fields, [Edit] button
-Edit mode: grid of inputs, [Save changes] + [Cancel]
-Form state is local (initialised from client prop)
-```
-
-### `InvoiceTable`
-```ts
-Props: { invoices: InvoiceSummary[] | undefined, isLoading: boolean }
-Columns: Number | Client | Status (StatusBadge) | Due | Total
-Row click → router.push(/invoices/[id])
-```
-
-### `LineItemsEditor`
-
-Two modes controlled by `mode` prop:
-
-**Create mode:**
-```ts
-Props: { mode: 'create', items: LineItemDraft[], onChange, currency }
-Renders: grid of input rows
-  - description (col-span-5)
-  - quantity (col-span-2)
-  - unitRate (col-span-2)
-  - taxRate (col-span-2)
-  - delete button (col-span-1)
-Live totals: subtotal / tax / total computed from draft state
-[Add line item] button appends newDraft() to array
-```
-
-**Edit mode:**
-```ts
-Props: { mode: 'edit', items: InvoiceLineItemResponse[], invoiceId, currency }
-Renders: read-only rows + delete button per row
-Mutations:
-  deleteLineItemMutation → DELETE /invoices/:id/line-items/:itemId
-  addLineItemMutation    → POST /invoices/:id/line-items
-Both invalidate ['invoices', invoiceId] on success
-AddLineItemForm: local state form at bottom, clears on successful add
-```
-
----
-
-## 8. Page Specifications
-
-### `/ (Dashboard)`
-
-Queries:
-```
-['dashboard']                        → GET /dashboard/summary           → DashboardSummary
-['invoices', { page:0, size:5, sort:'createdAt,desc' }]  → GET /invoices  → PageResponse<InvoiceSummary>
-```
-
-Layout: h1 + 2×2 StatCard grid + RecentInvoicesTable card
-
----
-
-### `/clients`
-
-State: `page=0`, `search=''`, `debouncedSearch=''`
-Debounce: 300ms timeout on search input (resets page to 0)
-
-Query:
-```
-['clients', { page, size:20, search }]  → GET /clients?page&size=20&search&sort=name,asc
-```
-`placeholderData: (prev) => prev` — keeps previous data during filter changes
-
----
-
-### `/clients/new`
-
-Mutation: `POST /clients` → on success: invalidate `['clients']` + router.push(`/clients/${id}`)
-Error handling: 400 → field-level errors from `data.errors`; other → banner
-
----
-
-### `/clients/[id]`
-
-Queries:
-```
-['clients', id]                    → GET /clients/:id    → ClientDetail
-['invoices', { clientId: id }]     → GET /invoices?clientId&size=20&sort=createdAt,desc
-```
-
-Modes: view (ClientInfoCard read) / edit (ClientInfoCard edit form, inline toggle)
-
-Mutations:
-```
-updateMutation  → PUT /clients/:id  → invalidate ['clients', id] + ['clients'] → setEditing(false)
-deleteMutation  → DELETE /clients/:id
-  409 → "This client has existing invoices and cannot be deleted."
-  success → invalidate ['clients'] + router.push('/clients')
-```
-
-Invoice mini-table: Number | Status | Due | Total, with "+ New Invoice" link to `/invoices/new?clientId=id`
-
----
-
-### `/invoices`
-
-Filters state: `status=''`, `clientId=''`, `sort='createdAt,desc'`, `page=0`
-
-Queries:
-```
-['invoices', { page, status, clientId, sort }]     → GET /invoices
-['clients', { size: 100 }]                          → GET /clients (populates client select)
-```
-`placeholderData: (prev) => prev`
-
----
-
-### `/invoices/new`
-
-Queries:
-```
-['clients', { size: 100 }]   → client select
-['me']                        → default currency, staleTime: Infinity
-```
-
-Local state: `lineItems: LineItemDraft[]`
-Currency: `form.currency || profile.defaultCurrency || 'GBP'`
-Pre-select client: reads `router.query.clientId`
-
-Submit: parse all drafts → `POST /invoices` with full lineItems array → invalidate `['invoices']` + `['dashboard']`
-
----
-
-### `/invoices/[id]`
-
-Query: `['invoices', id]` → `GET /invoices/:id`
-
-Action matrix:
-```
-DRAFT:        Edit (link) | Send (confirm) | Void (confirm) | Delete (confirm+danger)
-SENT/OVERDUE: Download PDF | Mark as Paid (confirm) | Void (confirm)
-PAID/VOID:    Download PDF
-```
-
-Mutations:
-```
-send       → POST /invoices/:id/send
-paidMutation → POST /invoices/:id/mark-paid
-void       → POST /invoices/:id/void
-delete     → DELETE /invoices/:id → router.push('/invoices')
-```
-All invalidate `['invoices', id]` and `['dashboard']`.
-422 errors → `bannerError = response.data.message`
-
-PDF download:
-```
-GET /invoices/:id/pdf  responseType: 'blob'
-→ createObjectURL → <a download> → click → cleanup
-```
-
----
-
-### `/invoices/[id]/edit`
-
-Guard: if `invoice.status !== 'DRAFT'` → router.replace(`/invoices/${id}`)
-
-Form fields: issueDate, dueDate, taxLabel, note (pre-populated from invoice)
-LineItemsEditor in edit mode — mutations fire immediately on each change
-
-Save: `PUT /invoices/:id` → invalidate `['invoices', id]` → router.push(`/invoices/${id}`)
-
----
-
-### `/settings`
-
-Query: `['me']` → `GET /users/me`
-Form fields: firstName, lastName (editable) | email (read-only) | invoicePrefix | taxLabel | defaultCurrency (select)
-Mutation: `PUT /users/me` → invalidate `['me']` → show 3s success banner
-
----
-
-## 9. React Query Key Registry
-
-| Key | API Call | Invalidated by |
+| Method | Address | Handler |
 |---|---|---|
-| `['dashboard']` | GET /dashboard/summary | Create/send/pay/void invoice |
-| `['clients', { page, size, search }]` | GET /clients | Create, update, delete client |
-| `['clients', id]` | GET /clients/:id | Update client |
-| `['clients', { size: 100 }]` | GET /clients?size=100 | Create client |
-| `['invoices', { page, status, clientId, sort }]` | GET /invoices | Create, delete invoice |
-| `['invoices', id]` | GET /invoices/:id | Send, pay, void, edit, line item mutations |
-| `['invoices', { clientId }]` | GET /invoices?clientId | (not explicitly invalidated — stale-while-revalidate) |
-| `['me']` | GET /users/me | PUT /users/me |
+| POST | `/auth/register` | `auth/register.ts` |
+| POST | `/auth/login` | `auth/login.ts` |
+| GET, PUT | `/users/me` | `users/me/index.ts` |
+| POST | `/users/me/logo` | `users/me/logo.ts` |
+| GET | `/users/{id}/logo` | `users/[id]/logo.ts` |
+| GET | `/dashboard/summary` | `dashboard/summary.ts` |
+| GET, POST | `/clients` | `clients/index.ts` |
+| GET, PUT, DELETE | `/clients/{id}` | `clients/[id].ts` |
+| GET, POST | `/invoices` | `invoices/index.ts` |
+| GET, PUT, DELETE | `/invoices/{id}` | `invoices/[id]/index.ts` |
+| POST | `/invoices/{id}/send` | `invoices/[id]/send.ts` |
+| POST | `/invoices/{id}/mark-paid` | `invoices/[id]/mark-paid.ts` |
+| POST | `/invoices/{id}/void` | `invoices/[id]/void.ts` |
+| POST | `/invoices/{id}/line-items` | `invoices/[id]/line-items/index.ts` |
+| DELETE | `/invoices/{id}/line-items/{itemId}` | `invoices/[id]/line-items/[itemId].ts` |
+| GET | `/invoices/{id}/pdf` | `invoices/[id]/pdf.ts` |
+| GET, POST | `/jobs/mark-overdue` | `jobs/mark-overdue.ts` |
 
----
+## The reply shape
 
-## 10. Error Handling Summary
+Every JSON answer:
 
-| HTTP Status | Handler |
-|---|---|
-| 400 | Field-level errors from `data.data.errors`; fallback to `data.message` banner |
-| 401 | Axios interceptor: clear cookie + logout + hard redirect `/login` |
-| 404 | Show "not found" message in place; no redirect |
-| 409 | Inline error: "This client has existing invoices and cannot be deleted." |
-| 422 | Banner: display `data.message` directly |
-| 5xx | Banner: `data.message ?? 'Something went wrong'` |
+```json
+{ "status": "success" | "error", "message": "…", "data": … }
+```
 
----
+`data` is present and `null` on a refusal, never left out — a missing key reads as
+`undefined` in the browser and renders a blank page instead of an error.
 
-## 11. CSS Design Tokens (`globals.css` `@theme {}`)
+Every list answer additionally:
 
-| Token | Value | Usage |
-|---|---|---|
-| `--color-primary` | `#4f46e5` | Buttons, links, active nav |
-| `--color-primary-hover` | `#4338ca` | Button hover state |
-| `--color-surface` | `#ffffff` | Cards, modals |
-| `--color-surface-alt` | `#f8fafc` | Sidebar bg, page bg |
-| `--color-border` | `#e2e8f0` | Dividers, input borders, card borders |
-| `--color-text` | `#0f172a` | Body text |
-| `--color-muted` | `#64748b` | Secondary text, labels |
-| `--radius-card` | `8px` | Card border radius |
-| `--shadow-card` | `0 1px 3px 0 rgb(0 0 0 / 0.08)` | Card shadow |
+```json
+{ "content": [], "page": 0, "size": 20, "totalElements": 0,
+  "totalPages": 0, "first": true, "last": true }
+```
+
+Built by `src/server/http/envelope.ts` and `page.ts`. A sort field is checked against
+a known list before it goes anywhere near a query; a page size is capped at 200.
+
+## How a handler is put together
+
+```ts
+export default apiRoute({
+  GET: async (req, res) => {
+    const accountId = await requireAccountId(req)   // who is asking
+    const input = someSchema.parse(readBody(req))   // is this acceptable
+    sendOk(res, await someStore(accountId, input))  // ask, and answer
+  },
+})
+```
+
+`apiRoute` catches whatever is thrown underneath: an `ApiError` becomes its own code
+and message, a checker's complaint becomes a 400 with the words it produced, and
+anything else becomes a 500 with an apology — never its own words, because its own
+words are a stack trace.
+
+## Working out the money
+
+`src/server/invoices/money.ts`. Given a currency, some lines and any named tax
+entries:
+
+- each line total is quantity × rate, rounded to the currency's smallest unit
+- each line's tax is its line total × its rate, rounded the same way
+- the subtotal is the sum of the line totals
+- each named tax entry's amount is the subtotal × its rate
+- the tax total is the sum of the named entries if there are any; otherwise the sum of
+  the per-line tax. Named entries describe the whole invoice, so counting both would
+  charge the same tax twice
+- the total is the subtotal plus the tax total
+
+Ties round away from zero: 0.125 is 13p, not 12p. The rounding follows the invoice's
+own currency, not the account's default — an invoice in yen has no fractional part.
+
+Totals arriving in a request are ignored. Only what is worked out here is saved.
+
+## Invoice numbers
+
+An account has an `invoicePrefix` and an `invoiceNextNumber`. The number shown is the
+prefix followed by the counter padded to four digits: `INV-0048`. A counter past four
+digits is not truncated: `INV-12345`.
+
+Raising an invoice runs, inside the same transaction that writes it:
+
+```sql
+UPDATE "Account" SET "invoiceNextNumber" = "invoiceNextNumber" + 1
+ WHERE "id" = $1 RETURNING "invoicePrefix", "invoiceNextNumber" - 1
+```
+
+Reading the counter and writing it back as two steps is what lets two invoices raised
+at the same instant get the same number; one returning update makes that impossible.
+A unique rule on `(accountId, invoiceNumber)` in the database is the second line of
+defence. Everything that can be refused is checked before the transaction opens, so a
+refused invoice never burns a number.
+
+Saving the settings page never touches the counter — `updateProfileSchema` does not
+have a field for it, so a request that tries is simply dropped.
+
+## What an invoice may become next
+
+`src/server/invoices/lifecycle.ts`.
+
+```
+DRAFT ──▶ SENT ──▶ PAID
+  │        │  ╲
+  │        │   ╲──▶ OVERDUE ──▶ PAID
+  ▼        ▼            │
+ VOID     VOID ◀────────┘
+```
+
+- a draft may be sent or voided, and only a draft may be deleted
+- a sent invoice may be marked paid, voided, or turned overdue by the nightly sweep
+- an overdue invoice may still be paid or voided
+- a paid or voided invoice never moves again
+
+Each move stamps its own moment: `sentAt`, `paidAt`, `voidedAt`. Going overdue stamps
+nothing — the due date already says when. A refused move changes nothing and is not
+written down as having happened.
+
+## Who is asking
+
+`requireAccountId` reads the `Authorization: Bearer …` header, checks the signature
+and hands back the account id. Every store takes that id and filters by it. Nothing
+ever reads an account id out of a request body or a web address.
+
+An account belonging to somebody else is refused as **not found**, which both refuses
+and declines to confirm the record exists.
+
+## Passwords
+
+Scrambled with bcrypt. Which method scrambled a password is recorded per account,
+because accounts carried over from before were scrambled by something this project
+could not read. Checking is driven by what the stored value looks like, and a password
+that checks out under an older method is quietly re-scrambled to the current one on
+the way past — so people sign in with the password they already use and drift onto the
+modern method by themselves.
+
+## The nightly sweep
+
+`GET` or `POST /api/v1/jobs/mark-overdue`, carrying `CRON_SECRET` as a bearer token.
+Both methods answer, because the schedule may send either and a job that answers only
+`POST` silently never runs.
+
+One `UPDATE` marks every sent invoice whose due date has passed. An invoice due today
+is not yet overdue. Every run writes a `JobRun` row — when it started, when it
+finished, how many invoices it changed, and why if it failed.
+
+## The database
+
+`prisma/schema.prisma`, built by the files in `prisma/migrations/`. Money is
+`Decimal`, never a floating point number. Calendar days (`issueDate`, `dueDate`) are
+`DATE` with no time of day; moments keep their time.
+
+Every moved record carries the id it had in the old database as `legacyId`, which is
+what lets the data mover be run twice without duplicating anything.

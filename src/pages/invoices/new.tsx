@@ -40,6 +40,7 @@ export default function NewInvoicePage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [createdInvoiceId, setCreatedInvoiceId] = useState<number | null>(null)
+  const invoiceNumberEditedRef = useRef(false)
 
   const { data: clientsPage } = useQuery({
     queryKey: ['clients', { size: 100 }],
@@ -62,7 +63,7 @@ export default function NewInvoicePage() {
     if (profile && !profileInitRef.current) {
       profileInitRef.current = true
       const nextNum = String(profile.invoiceNextNumber ?? 1).padStart(4, '0')
-      const suggestedNumber = `${profile.invoicePrefix ?? 'INV'}-${nextNum}`
+      const suggestedNumber = `${profile.invoicePrefix ?? 'INV'}${nextNum}`
       setForm((f) => ({
         ...f,
         currency: f.currency || profile.defaultCurrency || 'GBP',
@@ -74,7 +75,9 @@ export default function NewInvoicePage() {
 
   const buildBody = (): CreateInvoiceRequest => ({
     clientId: parseInt(form.clientId),
-    invoiceNumber: form.invoiceNumber.trim() || undefined,
+    invoiceNumber: invoiceNumberEditedRef.current
+      ? form.invoiceNumber.trim() || undefined
+      : undefined,
     currency: form.currency || 'GBP',
     issueDate: form.issueDate,
     dueDate: form.dueDate,
@@ -182,7 +185,10 @@ export default function NewInvoicePage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Invoice number</label>
                 <input
                   value={form.invoiceNumber}
-                  onChange={set('invoiceNumber')}
+                  onChange={(event) => {
+                    invoiceNumberEditedRef.current = true
+                    setForm((current) => ({ ...current, invoiceNumber: event.target.value }))
+                  }}
                   placeholder="INV-0001"
                   className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />

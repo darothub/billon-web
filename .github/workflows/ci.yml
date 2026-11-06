@@ -1,0 +1,53 @@
+ # The gate. A change that breaks the type check or a test does not land.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: billon
+          POSTGRES_PASSWORD: billon
+          POSTGRES_DB: billon_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U billon -d billon_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://billon:billon@localhost:5432/billon_test
+      JWT_SECRET: a-secret-used-only-by-continuous-integration
+      CRON_SECRET: a-cron-secret-used-only-by-continuous-integration
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build the test database structure
+        run: npx prisma migrate deploy
+
+      - name: Unit and contract tests
+        run: npm test
+
+      - name: Database-backed tests
+        run: npm run test:db
