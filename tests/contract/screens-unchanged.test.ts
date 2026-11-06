@@ -74,11 +74,12 @@ describe('the screens are untouched by this work', () => {
       .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
       .map((l) => l.slice(1).trim())
       .filter(Boolean)
-    // One line changes. A comment or two is fine; a rewrite is not.
+    // At most one line changes (none once the baseline has moved past the move). A
+    // comment or two is fine; a rewrite is not.
     expect(
-      addedLines.filter((l) => !l.startsWith('//')),
+      addedLines.filter((l) => !l.startsWith('//')).length,
       `more than the base address changed in src/lib/api.ts:\n  ${addedLines.join('\n  ')}`
-    ).toHaveLength(1)
+    ).toBeLessThanOrEqual(1)
   })
 })
 

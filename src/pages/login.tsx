@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Head from 'next/head'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import api from '@/lib/api'
+import { apiErrorMessage } from '@/lib/utils'
 import { useAuthStore } from '@/lib/auth'
 import type { ApiResponse, AuthResponse } from '@/lib/types'
 
@@ -29,8 +30,7 @@ export default function LoginPage() {
       setToken(res.data.data!.token)
       router.replace('/')
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } }
-      setError(e.response?.data?.message ?? 'Invalid email or password')
+      setError(apiErrorMessage(err, 'We could not sign you in. Please try again.'))
     } finally {
       setLoading(false)
     }

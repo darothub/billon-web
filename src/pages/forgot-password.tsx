@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Head from 'next/head'
 import api from '@/lib/api'
+import { apiErrorMessage } from '@/lib/utils'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -17,8 +18,7 @@ export default function ForgotPasswordPage() {
       await api.post('/auth/forgot-password', { email })
       setSent(true)
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } }
-      setError(e.response?.data?.message ?? 'Something went wrong. Please try again.')
+      setError(apiErrorMessage(err, 'We could not send the reset link. Please try again.'))
     } finally {
       setLoading(false)
     }

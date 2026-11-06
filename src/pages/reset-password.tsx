@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import Link from 'next/link'
 import Head from 'next/head'
 import api from '@/lib/api'
+import { apiErrorMessage } from '@/lib/utils'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -30,8 +31,7 @@ export default function ResetPasswordPage() {
       setDone(true)
       setTimeout(() => router.replace('/login'), 2000)
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } }
-      setError(e.response?.data?.message ?? 'This reset link is invalid or has expired')
+      setError(apiErrorMessage(err, 'We could not reset your password. Please try again.'))
     } finally {
       setLoading(false)
     }

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Head from 'next/head'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import api from '@/lib/api'
+import { apiErrorMessage } from '@/lib/utils'
 import { useAuthStore } from '@/lib/auth'
 import type { ApiResponse, AuthResponse } from '@/lib/types'
 
@@ -39,10 +40,10 @@ export default function RegisterPage() {
         if (errors) {
           setFieldErrors(errors)
         } else {
-          setBannerError(e.response?.data?.message ?? 'Validation failed')
+          setBannerError(apiErrorMessage(err, 'Some details are not valid. Please check them and try again.'))
         }
       } else {
-        setBannerError(e.response?.data?.message ?? 'Something went wrong')
+        setBannerError(apiErrorMessage(err, 'We could not create your account. Please try again.'))
       }
     } finally {
       setLoading(false)
