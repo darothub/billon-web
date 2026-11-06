@@ -1,6 +1,6 @@
 {
-  "note": "The screens as they stood before the move to a Next.js server half. Every file listed here reads a reply from the API. The promise is that none of them had to change, so this file is the record of what 'unchanged' means. Once the move has landed and been signed off, move baselineRef forward to that commit \u2014 do not delete the check. Moved forward to e9ac608, the commit that landed the move to a Next.js server half.",
-  "baselineRef": "e9ac608",
+  "note": "The screens as they stood before the move to a Next.js server half. Every file listed here reads a reply from the API. The promise is that none of them had to change, so this file is the record of what 'unchanged' means. Once the move has landed and been signed off, move baselineRef forward to that commit \u2014 do not delete the check. Moved forward to 05345ea, the commit that landed the move to a Next.js server half.",
+  "baselineRef": "05345ea",
   "recordedOn": "2026-11-06",
   "deliberatelyChanged": [
     "src/lib/api.ts"
