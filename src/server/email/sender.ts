@@ -48,7 +48,9 @@ export async function sendEmail(email: Email): Promise<SendResult> {
     })
 
     return { sent: true }
-  } catch {
+  } catch (cause) {
+    if (cause instanceof MailDeliveryError) throw cause
+    console.error('[billon] mail provider rejected the message:', (cause as { response?: string }).response ?? (cause as Error).message)
     throw new MailDeliveryError()
   }
 }
