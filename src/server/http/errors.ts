@@ -43,6 +43,13 @@ export function respondToError(res: NextApiResponse, error: unknown): void {
     return
   }
 
+  const known = describeInfrastructureFault(error)
+  if (known) {
+    console.error(`[billon] ${known.log}`, error)
+    sendFail(res, known.status, known.message)
+    return
+  }
+
   // Nothing we meant to happen. Say so plainly and keep the detail in the logs.
   console.error('[billon] unhandled error answering a request', error)
   sendFail(res, 500, 'Something went wrong at our end. Please try again.')
@@ -66,4 +73,49 @@ function describeUniqueClash(error: Prisma.PrismaClientKnownRequestError): strin
     return 'That email address is already in use.'
   }
   return 'Those details are already in use. Please choose something else.'
+}
+
+interface Fault {
+  status: number
+  message: string
+  log: string
+}
+
+/**
+ * Faults that are about how the app is set up rather than what the person did.
+ * The words are safe to show (no connection strings or stack traces); the full
+ * error still goes to the server logs.
+ */
+function describeInfrastructureFault(error: unknown): Fault | null {
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    return {
+      status: 503,
+      message: 'Billon cannot reach its database right now. Please try again in a few minutes.',
+      log: `database connection failed (${error.errorCode ?? 'no code'}) — check DATABASE_URL`,
+    }
+  }
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2021' || error.code === 'P2022') {
+      return {
+        status: 503,
+        message: 'Billon\'s database has not been set up yet. Please contact support.',
+        log: `database tables are missing or out of date (${error.code}) — run prisma migrate deploy`,
+      }
+    }
+    if (['P1001', 'P1002', 'P1008', 'P1017', 'P2024'].includes(error.code)) {
+      return {
+        status: 503,
+        message: 'Billon cannot reach its database right now. Please try again in a few minutes.',
+        log: `database unavailable (${error.code})`,
+      }
+    }
+  }
+  if (error instanceof Error && /JWT_SECRET is not set/.test(error.message)) {
+    return {
+      status: 500,
+      message: 'Billon is not fully configured, so signing in is unavailable. Please contact support.',
+      log: 'JWT_SECRET is not set',
+    }
+  }
+  return null
 }

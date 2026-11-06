@@ -1,7 +1,7 @@
 {
-  "note": "The screens as they stood before the move to a Next.js server half. Every file listed here reads a reply from the API. The promise is that none of them had to change, so this file is the record of what 'unchanged' means. Once the move has landed and been signed off, move baselineRef forward to that commit — do not delete the check.",
-  "baselineRef": "8f7af42",
-  "recordedOn": "2026-09-02",
+  "note": "The screens as they stood before the move to a Next.js server half. Every file listed here reads a reply from the API. The promise is that none of them had to change, so this file is the record of what 'unchanged' means. Once the move has landed and been signed off, move baselineRef forward to that commit \u2014 do not delete the check. Moved forward to e9ac608, the commit that landed the move to a Next.js server half.",
+  "baselineRef": "e9ac608",
+  "recordedOn": "2026-11-06",
   "deliberatelyChanged": [
     "src/lib/api.ts"
   ],
@@ -21,10 +21,7 @@
     "src/pages/invoices/[id]/index.tsx",
     "src/pages/invoices/[id]/edit.tsx"
   ],
-  "reviewedEdits": {
-    "src/pages/login.tsx": "Adds a 'Forgot password?' link beside the password label. Touches no line that reads a reply.",
-    "src/pages/invoices/new.tsx": "Invoice-number edit tracking and the suggested-number format. Touches no line that reads a reply."
-  },
+  "reviewedEdits": {},
   "knownPreExistingEdits": [
     "src/components/layout/AppShell.tsx"
   ],
