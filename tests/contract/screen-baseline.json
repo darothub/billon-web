@@ -1,0 +1,32 @@
+{
+  "note": "The screens as they stood before the move to a Next.js server half. Every file listed here reads a reply from the API. The promise is that none of them had to change, so this file is the record of what 'unchanged' means. Once the move has landed and been signed off, move baselineRef forward to that commit — do not delete the check.",
+  "baselineRef": "8f7af42",
+  "recordedOn": "2026-09-02",
+  "deliberatelyChanged": [
+    "src/lib/api.ts"
+  ],
+  "deliberatelyChangedWhy": "One line: the base address stops being read from a setting and becomes the relative path /api/v1. Nothing else in the file moves.",
+  "replyReadingFiles": [
+    "src/components/layout/Topbar.tsx",
+    "src/components/invoices/LineItemsEditor.tsx",
+    "src/pages/login.tsx",
+    "src/pages/register.tsx",
+    "src/pages/index.tsx",
+    "src/pages/settings.tsx",
+    "src/pages/clients/index.tsx",
+    "src/pages/clients/new.tsx",
+    "src/pages/clients/[id].tsx",
+    "src/pages/invoices/index.tsx",
+    "src/pages/invoices/new.tsx",
+    "src/pages/invoices/[id]/index.tsx",
+    "src/pages/invoices/[id]/edit.tsx"
+  ],
+  "reviewedEdits": {
+    "src/pages/login.tsx": "Adds a 'Forgot password?' link beside the password label. Touches no line that reads a reply.",
+    "src/pages/invoices/new.tsx": "Invoice-number edit tracking and the suggested-number format. Touches no line that reads a reply."
+  },
+  "knownPreExistingEdits": [
+    "src/components/layout/AppShell.tsx"
+  ],
+  "knownPreExistingEditsWhy": "Already modified in the working tree before this work began, and does not read any reply. Listed so it is not mistaken for a change made by this work."
+}

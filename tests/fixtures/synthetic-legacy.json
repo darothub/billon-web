@@ -1,0 +1,52 @@
+{
+  "accounts": [
+    {
+      "id": 101,
+      "email": "legacy-one@example.test",
+      "passwordHash": "$2a$10$synthetic.not.a.production.hash.000000000000000000000",
+      "firstName": "Legacy",
+      "lastName": "One",
+      "defaultCurrency": "GBP",
+      "invoicePrefix": "OLD-",
+      "invoiceNextNumber": 46,
+      "taxLabel": "VAT",
+      "logoUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "bankName": "Example Bank",
+      "bankAccountNumber": "REDACTED",
+      "bankSortCode": "REDACTED",
+      "paymentDetails": "Synthetic fixture only",
+      "createdAt": "2025-01-01T09:00:00Z",
+      "updatedAt": "2026-01-01T09:00:00Z"
+    }
+  ],
+  "clients": [
+    {
+      "id": 201,
+      "accountId": 101,
+      "name": "Fixture Client",
+      "email": "client@example.test",
+      "companyName": "Fixture Ltd",
+      "addressLine1": "1 Test Street",
+      "addressLine2": null,
+      "city": "Teston",
+      "postcode": "T1 1ST",
+      "country": "GB",
+      "createdAt": "2025-01-02T09:00:00Z",
+      "updatedAt": "2026-01-02T09:00:00Z"
+    }
+  ],
+  "invoices": [
+    { "id": 301, "status": "DRAFT", "number": "OLD-0041", "taxEntries": [{ "label": "VAT", "rate": 0.2 }] },
+    { "id": 302, "status": "SENT", "number": "OLD-0042", "taxEntries": [] },
+    { "id": 303, "status": "OVERDUE", "number": "OLD-0043", "taxEntries": [{ "label": "Levy", "rate": 0.05 }] },
+    { "id": 304, "status": "PAID", "number": "OLD-0044", "taxEntries": [] },
+    { "id": 305, "status": "VOID", "number": "OLD-0045", "taxEntries": [] }
+  ],
+  "lines": [
+    { "id": 401, "invoiceId": 301, "description": "Draft work" },
+    { "id": 402, "invoiceId": 302, "description": "Sent work" },
+    { "id": 403, "invoiceId": 303, "description": "Overdue work" },
+    { "id": 404, "invoiceId": 304, "description": "Paid work" },
+    { "id": 405, "invoiceId": 305, "description": "Void work" }
+  ]
+}

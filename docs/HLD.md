@@ -1,164 +1,104 @@
-# Billon Web — High-Level Design (HLD)
+# Billon — High Level Design
 
-**Version:** 1.0
-**Date:** 2026-04-09
-**Scope:** Frontend web application (`billon-web`)
+## What Billon is
 
----
+A focused invoice management app for freelancers: keep a list of clients, raise an
+invoice against one, send it, chase it, mark it paid, and hand the client a PDF.
 
-## 1. System Overview
+## The shape of it
 
-Billon is a focused invoice management SaaS for freelancers. The web frontend is a Next.js single-page application that communicates exclusively with the `billon-api` Spring Boot backend via a JSON REST API.
-
-```
-Browser
-  └── Next.js 16 (Pages Router)
-        ├── TanStack React Query   — server-state cache, loading/error handling
-        ├── Zustand                — auth token (in-memory + cookie)
-        ├── Axios                  — HTTP client with request/response interceptors
-        └── Tailwind CSS v4        — utility-first styles, @theme {} tokens
-              ↕  HTTPS REST API
-        billon-api  (Fly.io, Spring Boot 4.0 / PostgreSQL)
-```
-
----
-
-## 2. Architectural Principles
-
-| Principle | Decision |
-|---|---|
-| No server-side rendering of authenticated data | All authenticated pages are purely client-side. AppShell guards every route. |
-| No demo/fixture data | Real API or proper empty state — zero tolerance for fixtures in production pages |
-| Cookie-based auth | `billon_token` cookie (7-day, `SameSite=Lax`). Axios reads it directly on every request. |
-| Single source of truth for types | `src/lib/types.ts` — all interfaces live here |
-| Single source of truth for status colours | `StatusBadge` component — never hardcode status colours elsewhere |
-| Fail fast | `retry: false` on all React Query calls |
-| Monetary formatting | `${currency} ${amount.toFixed(2)}` — never `Intl.NumberFormat` |
-
----
-
-## 3. Application Layers
+One web app talking to one database. The screens and the server live in the same
+project and deploy together.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Pages  (src/pages/)                                    │
-│  Route entry points — orchestrate queries + mutations   │
-├─────────────────────────────────────────────────────────┤
-│  Layout  (src/components/layout/)                       │
-│  AppShell — auth guard + sidebar + topbar               │
-├─────────────────────────────────────────────────────────┤
-│  Feature Components  (src/components/{domain}/)         │
-│  Tables, cards, editors — render only, no API calls     │
-├─────────────────────────────────────────────────────────┤
-│  UI Primitives  (src/components/ui/)                    │
-│  StatusBadge, Pagination, ConfirmDialog, EmptyState...  │
-├─────────────────────────────────────────────────────────┤
-│  Data Layer  (src/lib/)                                 │
-│  api.ts · auth.ts · types.ts · utils.ts                │
-└─────────────────────────────────────────────────────────┘
+  Browser
+     │
+     ▼
+  Next.js app  ──────────────────────────────┐
+     ├─ screens          src/pages/**        │  one deployment
+     ├─ request handlers src/pages/api/v1/** │  one hosting bill
+     └─ the parts below  src/server/**       │
+     │                                        ┘
+     ▼
+  PostgreSQL   prisma/schema.prisma
 ```
 
----
+Why one thing rather than two: Billon is a single-team, low-traffic app, and almost
+every piece of work — currency, tax entries, PDFs, invoice numbering — touches both
+halves. When those halves were separate codebases, each of those was two edits, two
+deployments and a chance for the two to disagree about a shape. In one project it is
+one edit, one deployment, and a shape that cannot disagree with itself because there
+is one description of it, in `src/lib/types.ts`, used by both sides.
 
-## 4. Route Map
+Nothing in the requirements asks for one half to scale independently of the other, so
+there is no reason to pay for the seam.
 
-| URL | Page | Auth |
+## The parts
+
+| Part | Where | What it does |
 |---|---|---|
-| `/login` | Login form | Public (redirect to `/` if logged in) |
-| `/register` | Register form | Public (redirect to `/` if logged in) |
-| `/` | Dashboard — stat cards + recent invoices | Protected |
-| `/clients` | Client list with search + pagination | Protected |
-| `/clients/new` | Create client form | Protected |
-| `/clients/[id]` | Client detail + inline edit + invoice mini-table | Protected |
-| `/invoices` | Invoice list with filters | Protected |
-| `/invoices/new` | Create invoice with line items | Protected |
-| `/invoices/[id]` | Invoice detail + status actions | Protected |
-| `/invoices/[id]/edit` | Edit DRAFT invoice | Protected |
-| `/settings` | User profile settings | Protected |
+| Screens | `src/pages`, `src/components` | Draws every page and holds the cached copies of what the server said |
+| Browser API client | `src/lib/api.ts` | The one place the browser makes requests; attaches the token, signs out on a refusal |
+| Request handlers | `src/pages/api/v1/**` | One small file per address; reads, checks, asks, answers. No rules of its own |
+| Reply envelope | `src/server/http/envelope.ts`, `page.ts` | Puts every answer in the shape the screens read |
+| Input checker | `src/server/validation/**` | Refuses bad input in words a person can be shown |
+| Sign-in tokens | `src/server/auth/token.ts` | Makes and checks the signed token that says who is asking |
+| Password verifier | `src/server/auth/password.ts` | Scrambles and checks passwords, including inherited ones |
+| Client store | `src/server/clients/**` | Reads and writes one account's clients |
+| Invoice store | `src/server/invoices/**` | Reads and writes invoices, their lines and their tax entries |
+| Money calculator | `src/server/invoices/money.ts` | Works out every figure on an invoice, exactly |
+| Invoice numbering | `src/server/invoices/numbering.ts` | Hands out the next number for an account |
+| Invoice lifecycle | `src/server/invoices/lifecycle.ts` | Knows what an invoice may become next |
+| Dashboard figures | `src/server/dashboard/summary.ts` | The nine figures on the front page |
+| Profile store | `src/server/profile/store.ts` | The signed-in person's own details |
+| Logo store | `src/server/profile/logo.ts` | Keeps and serves the account's logo |
+| PDF maker | `src/server/pdf/**` | Turns one invoice into a document |
+| Invoice sender | `src/server/invoices/sender.ts` | Carries out the send action |
+| Email sender | `src/server/email/sender.ts` | Puts one email with an attachment on its way |
+| Overdue sweeper | `src/server/jobs/markOverdue.ts` | Marks unpaid invoices overdue each night |
+| Activity log | `src/server/activity/log.ts` | Writes down every change that matters |
+| Database access | `src/server/db/client.ts`, `prisma/**` | The single door to the database |
+| Data mover | `scripts/migrate/**` | Carries the old data across, repeatably |
 
----
+## The decisions worth knowing
 
-## 5. Auth Flow
+**The addresses did not change.** Every screen already called `/api/v1/...` and read
+`{ status, message, data }` back. Those addresses are now answered by this app, and
+the reply shape is built in one shared place so no handler can quietly get it wrong.
+The only edit on the browser side was the base address in `src/lib/api.ts`.
 
-```
-User visits protected page
-      │
-      ▼
-AppShell reads token from useAuthStore
-      │
-  token null? ──yes──► router.replace('/login') → return null
-      │
-      no
-      │
-      ▼
-Render page normally
+**Money is exact from end to end.** Amounts are held as exact decimals in the
+database, worked out as exact decimals, and turned into ordinary numbers only when the
+reply is written. Ordinary computer numbers cannot represent 0.10, and adding a few
+hundred of them drifts by pennies.
 
-On any API call → 401 response:
-  Cookies.remove('billon_token')
-  useAuthStore.getState().logout()
-  window.location.replace('/login')    ← hard redirect, clears React state
-```
+**Invoice numbers come from a counter that moves in one step.** Each account has a
+prefix and a next number. Raising an invoice moves that counter on and reads it back
+in a single statement inside the transaction that saves the invoice, so two invoices
+raised at the same instant cannot be given the same number. The database also refuses
+two invoices in one account sharing a number, so a future bug fails honestly.
 
----
+**The account always comes from the token.** Every store is given the account id read
+out of the sign-in token, never one from the request, and every read and write is
+filtered by it. A forgotten check finds nothing rather than showing somebody else's
+records.
 
-## 6. Data Flow (React Query)
+**Logos live in the database.** The web server's own disk is emptied on every
+deployment, so anything kept there disappears with it. Logos are small and there is at
+most one per account, so the database meets the promise without a second paid service.
 
-```
-Page mounts
-  └── useQuery({ queryKey, queryFn, retry: false })
-        ├── Cache HIT  → return cached data immediately
-        └── Cache MISS → call API → store in cache → render
+**Overdue is a nightly job, not a guess at read time.** A web app hosted this way is
+not always running and has no timer of its own, so the hosting platform calls a
+protected address once a night. Every run is written down — a sweep that quietly
+stopped running is worse than one that visibly failed.
 
-User action (create/update/delete)
-  └── useMutation({ mutationFn, onSuccess, onError })
-        └── onSuccess: invalidateQueries([affected keys])
-                          └── React Query refetches stale queries
-```
+**Nothing else runs.** No queue, no worker, no cache, no second service. Nothing in
+the requirements asks for work to happen out of band except the nightly sweep, and
+every extra part is one more thing to build, test, run and pay for.
 
----
+## What is written down elsewhere
 
-## 7. Invoice Status State Machine
-
-```
-DRAFT ──[Send]──► SENT ──[Mark Paid]──► PAID
-  │                  │
-  │             [Void]──► VOID
-  │
-[Void]──► VOID
-  │
-[Delete] ──► (deleted)    ← DRAFT only
-
-OVERDUE is set by the backend scheduler (not a client action)
-```
-
----
-
-## 8. Line Item Strategy
-
-| Page | Strategy |
-|---|---|
-| `/invoices/new` | Local state (`LineItemDraft[]`). All line items sent in one `POST /invoices` body. |
-| `/invoices/[id]/edit` | Each add/delete fires its own API call immediately. QueryClient invalidated after each. |
-
----
-
-## 9. Deployment Target
-
-- **Host:** Vercel (or Railway)
-- **Env var:** `NEXT_PUBLIC_API_URL=https://billon-api.fly.dev/api/v1`
-- **Build:** `next build` (static output + SSR shell pages)
-- **Backend:** `billon-api` on Fly.io (`shared-cpu-1x`, 1 GB RAM)
-
----
-
-## 10. File Count Summary
-
-| Category | Files |
-|---|---|
-| Pages | 10 |
-| Layout components | 3 |
-| Feature components | 6 |
-| UI primitives | 6 |
-| Lib (api, auth, types, utils) | 4 |
-| Styles | 1 |
-| **Total** | **30** |
+- `docs/LLD.md` — each address and each part, in detail
+- `docs/MIGRATION.md` — the switchover runbook and the way back
+- `docs/JAVA-SERVICE-FINDINGS.md` — the four things only the old project could answer
+- `tests/manual/changeover-checklist.md` — what a person has to do and sign off

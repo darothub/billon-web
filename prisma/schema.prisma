@@ -1,0 +1,182 @@
+// The one description of what Billon remembers.
+//
+// Money is held as an exact decimal everywhere, never as a floating point number,
+// so totals cannot drift by a penny. Dates that are calendar days (an issue date, a
+// due date) are stored as dates with no time of day; moments (sent, paid, voided)
+// keep their time.
+//
+// legacyId is the id a record had in the old Java database. It is what lets the data
+// mover be run twice without creating a second copy of everything.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                Int       @id @default(autoincrement())
+  legacyId          Int?      @unique
+  email             String    @unique
+  passwordHash      String
+  passwordAlgorithm String    @default("bcrypt")
+  firstName         String
+  lastName          String
+  defaultCurrency   String    @default("GBP")
+  invoicePrefix     String    @default("INV-")
+  invoiceNextNumber Int       @default(1)
+  taxLabel          String    @default("VAT")
+  bankName          String?
+  bankAccountNumber String?
+  bankSortCode      String?
+  paymentDetails    String?
+  logoImage         Bytes?
+  logoMimeType      String?
+  logoUpdatedAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  clients  Client[]
+  invoices Invoice[]
+  passwordResets PasswordResetToken[]
+}
+
+model Client {
+  id           Int      @id @default(autoincrement())
+  legacyId     Int?     @unique
+  accountId    Int
+  name         String
+  email        String
+  companyName  String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  postcode     String?
+  country      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  account  Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+
+  @@index([accountId, name])
+}
+
+model Invoice {
+  id            Int       @id @default(autoincrement())
+  legacyId      Int?      @unique
+  accountId     Int
+  clientId      Int
+  invoiceNumber String
+  status        String    @default("DRAFT")
+  issueDate     DateTime  @db.Date
+  dueDate       DateTime  @db.Date
+  currency      String
+  taxLabel      String    @default("VAT")
+  note          String?
+  subtotal      Decimal   @db.Decimal(18, 4)
+  taxTotal      Decimal   @db.Decimal(18, 4)
+  total         Decimal   @db.Decimal(18, 4)
+  sentAt        DateTime?
+  paidAt        DateTime?
+  voidedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  account    Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  client     Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  lineItems  InvoiceLine[]
+  taxEntries InvoiceTaxEntry[]
+
+  @@unique([accountId, invoiceNumber])
+  @@index([accountId, status])
+  @@index([accountId, createdAt])
+  @@index([accountId, status, dueDate])
+  @@index([clientId])
+}
+
+model InvoiceLine {
+  id          Int      @id @default(autoincrement())
+  legacyId    Int?     @unique
+  invoiceId   Int
+  description String
+  quantity    Decimal  @db.Decimal(18, 4)
+  unitRate    Decimal  @db.Decimal(18, 4)
+  taxRate     Decimal? @db.Decimal(9, 6)
+  lineTotal   Decimal  @db.Decimal(18, 4)
+  taxAmount   Decimal  @db.Decimal(18, 4)
+  position    Int      @default(0)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, position])
+}
+
+model InvoiceTaxEntry {
+  id        Int     @id @default(autoincrement())
+  legacyId  Int?    @unique
+  invoiceId Int
+  label     String
+  rate      Decimal @db.Decimal(9, 6)
+  amount    Decimal @db.Decimal(18, 4)
+  position  Int     @default(0)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, position])
+}
+
+model ActivityLog {
+  id         Int      @id @default(autoincrement())
+  accountId  Int?
+  subject    String
+  subjectId  Int?
+  action     String
+  detail     String?
+  occurredAt DateTime @default(now())
+
+  @@index([subject, subjectId, occurredAt])
+  @@index([accountId, occurredAt])
+}
+
+model JobRun {
+  id              Int       @id @default(autoincrement())
+  jobName         String
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  invoicesChanged Int       @default(0)
+  outcome         String    @default("RUNNING")
+  errorMessage    String?
+
+  @@index([jobName, startedAt])
+}
+
+model MigrationRun {
+  id            Int       @id @default(autoincrement())
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  outcome       String    @default("RUNNING")
+  sourceCounts  Json
+  targetCounts  Json
+  errorMessage  String?
+
+  @@index([startedAt])
+}
+
+// Only a fingerprint of each emailed reset link is kept, so a copy of the database
+// cannot be used to reset anybody's password.
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  accountId Int
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+}
